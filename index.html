@@ -1140,7 +1140,6 @@ function updateMiniMeteors(deltaTime) {
       });
 
       document.addEventListener('wheel', (event) => {
-        event.preventDefault();
         const zoomDelta = event.deltaY > 0 ? 1.1 : 0.9;
         controls.camera.targetDistance = Math.max(controls.minDistance, 
           Math.min(controls.maxDistance, controls.camera.targetDistance * zoomDelta));
@@ -1385,5 +1384,6 @@ sphericalComets.update(deltaTime);
     </script>
   </body>
 </html>
+
 
 
