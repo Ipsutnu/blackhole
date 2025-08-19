@@ -1,0 +1,1418 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blackhole</title>
+	<link rel="icon" href="icon.png" type="image/png">
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: #000;
+        overflow: hidden;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+       #hint {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.06);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        color: #cfcfcf;
+        font-size: 12px;
+        letter-spacing: .2px;
+        user-select: none;
+        pointer-events: none;
+        box-shadow: 0 4px 20px rgba(0,0,0,.6);
+        z-index: 100;
+        opacity: 0; /* Torna o rodapé invisível */
+        transition: opacity 0.3s ease-in-out; /* Adiciona uma transição suave */
+      }
+      #hint:hover {
+        opacity: 1; /* Torna-o visível ao passar o mouse */
+        pointer-events: auto; /* Permite a interação com os links */
+      }
+      a { 
+        color: #9bdcff; 
+        text-decoration: none; 
+        pointer-events: auto; 
+        cursor: pointer;
+      }
+      #loading {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #fff;
+        font-size: 18px;
+        z-index: 50;
+      }
+      #error {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #ff6b6b;
+        font-size: 16px;
+        text-align: center;
+        z-index: 50;
+        display: none;
+      }
+      #debug {
+        position: fixed;
+		display: none;
+        top: 20px;
+        right: 20px;
+        color: rgba(255,255,255,0.7);
+        font-size: 11px;
+        font-family: monospace;
+        background: rgba(0,0,0,0.5);
+        padding: 12px;
+        border-radius: 6px;
+        backdrop-filter: blur(8px);
+        z-index: 90;
+        border: 1px solid rgba(255,255,255,0.1);
+      }
+      #controls {
+        position: fixed;
+        bottom: 60px;
+        left: 20px;
+        color: rgba(255,255,255,0.8);
+        font-size: 12px;
+        background: rgba(0,0,0,0.6);
+        padding: 12px;
+        border-radius: 6px;
+        backdrop-filter: blur(8px);
+        z-index: 90;
+        border: 1px solid rgba(255,255,255,0.1);
+      }
+      .control-button {
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #fff;
+        padding: 4px 8px;
+        margin: 2px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+      }
+      .control-button:hover {
+        background: rgba(255,255,255,0.2);
+      }
+      .control-button.active {
+        background: rgba(0,150,255,0.3);
+        border-color: rgba(0,150,255,0.5);
+      }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <div id="loading">Carregando Buraco Negro Híbrido...</div>
+    <div id="error">
+      Erro ao carregar Three.js<br>
+      <small>Verifique sua conexão com a internet</small>
+    </div>
+    <div id="hint"> Duplo clique: Mini meteoro • <a href="#" id="reset">Reset</a> • <a href="#" id="toggle-debug">Debug</a> • <a href="#" id="toggle-warp"></a> Botão direito: Acelerar gravidade</div>
+    <div id="debug">
+      Distância: <span id="distance">0</span> UA<br>
+
+      Meteoros: <span id="mini-meteors">0</span><br>
+
+
+      Gravidade: <span id="gravity-status">1x</span><br>
+      FPS: <span id="fps">0</span>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+      if (typeof THREE === 'undefined') {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        throw new Error('Three.js não pôde ser carregado');
+      }
+
+      document.getElementById('loading').style.display = 'none';
+
+      // ====== Configuração básica ======
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+      camera.position.set(0, 8, 15);
+
+      const renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        powerPreference: "high-performance",
+        precision: "highp"
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0x000000);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.autoClear = false;
+      document.body.appendChild(renderer.domElement);
+
+const SPHERICAL_COMET_CONFIG = {
+  count: 2,
+  radius: 1000,
+  center: new THREE.Vector3(0, 0, 0),
+  starSize: 5,
+  trailSegments: 333,
+  trailOpacity: 0.03,
+  omegaMin: THREE.MathUtils.degToRad(18),
+  omegaMax: THREE.MathUtils.degToRad(28),
+  precessionMin: THREE.MathUtils.degToRad(2),
+  precessionMax: THREE.MathUtils.degToRad(5)
+};
+function makeStarSprite(size=128) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(size/2,size/2,0, size/2,size/2,size/2);
+  g.addColorStop(0.0,'rgba(255,255,255,1)');
+  g.addColorStop(0.2,'rgba(255,255,255,0.9)');
+  g.addColorStop(0.5,'rgba(255,255,255,0.25)');
+  g.addColorStop(1.0,'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(size/2,size/2,size/2,0,Math.PI*2); ctx.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+function randUnit() {
+  let x, y, z, s;
+  do { x = Math.random()*2-1; y = Math.random()*2-1; z = Math.random()*2-1; s = x*x+y*y+z*z; } while (s < 1e-6 || s > 1);
+  const inv = 1/Math.sqrt(s);
+  return new THREE.Vector3(x*inv, y*inv, z*inv);
+}
+class SphericalComet {
+  constructor(scene, tex, cfg) {
+    this.cfg = cfg;
+    const smat = new THREE.SpriteMaterial({
+      map: tex, transparent: true, depthWrite: false, depthTest: true,
+      blending: THREE.AdditiveBlending, opacity: 1
+    });
+    this.sprite = new THREE.Sprite(smat);
+    this.sprite.scale.setScalar(cfg.starSize);
+    this.sprite.renderOrder = -50;
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(cfg.trailSegments * 3);
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    const lmat = new THREE.LineBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: cfg.trailOpacity,
+      depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending
+    });
+    this.trail = new THREE.Line(g, lmat);
+    this.trail.frustumCulled = false;
+    this.trail.renderOrder = -40;
+
+    scene.add(this.sprite);
+    scene.add(this.trail);
+    this.center = cfg.center.clone();
+    this.radius = cfg.radius;
+    this.q = new THREE.Quaternion();
+    this.axisA = randUnit();
+    this.axisB = randUnit();
+    this.omega = THREE.MathUtils.randFloat(cfg.omegaMin, cfg.omegaMax);
+    this.precession = THREE.MathUtils.randFloat(cfg.precessionMin, cfg.precessionMax);
+    const r = randUnit();
+    this.v0 = r.sub(this.axisA.clone().multiplyScalar(r.dot(this.axisA))).normalize();
+    this._setPositionFromQuat();
+    const P = this.trail.geometry.getAttribute('position');
+    for (let i = 0; i < cfg.trailSegments; i++) {
+      P.array[3*i+0] = this.pos.x;
+      P.array[3*i+1] = this.pos.y;
+      P.array[3*i+2] = this.pos.z;
+    }
+    P.needsUpdate = true;
+    this._qMain = new THREE.Quaternion();
+    this._qPrec = new THREE.Quaternion();
+  }
+  _setPositionFromQuat() {
+    const v = this.v0.clone().applyQuaternion(this.q).multiplyScalar(this.radius);
+    this.pos = this.center.clone().add(v);
+  }
+  update(dt) {
+    this._qMain.setFromAxisAngle(this.axisA, this.omega * dt);
+    this._qPrec.setFromAxisAngle(this.axisB, this.precession * dt);
+    this.q.premultiply(this._qPrec);
+    this.q.premultiply(this._qMain);
+    this.q.normalize();
+    this._setPositionFromQuat();
+    this.sprite.position.copy(this.pos);
+    const P = this.trail.geometry.getAttribute('position');
+    const n = this.cfg.trailSegments;
+    for (let i = n - 1; i > 0; i--) {
+      P.array[3*i+0] = P.array[3*(i-1)+0];
+      P.array[3*i+1] = P.array[3*(i-1)+1];
+      P.array[3*i+2] = P.array[3*(i-1)+2];
+    }
+    P.array[0] = this.pos.x;
+    P.array[1] = this.pos.y;
+    P.array[2] = this.pos.z;
+    P.needsUpdate = true;
+  }
+}
+class SphericalCometManager {
+  constructor(scene, cfg) {
+    this.comets = [];
+    const tex = makeStarSprite(128);
+    for (let i = 0; i < cfg.count; i++) {
+      const c = new SphericalComet(scene, tex, cfg);
+      c.q.setFromAxisAngle(c.axisA, (i / cfg.count) * Math.PI * 2).multiply(c.q);
+      this.comets.push(c);
+    }
+  }
+  update(dt) {
+    for (const c of this.comets) c.update(dt);
+  }
+}
+
+      // ====== Sistema de renderização híbrida ======
+      const renderModes = {
+        HYBRID: 'hybrid',
+        SHADER_ONLY: 'shader',
+        PHYSICS_ONLY: 'physics'
+      };
+
+      let currentMode = renderModes.HYBRID;
+
+      // ====== Camera ortográfica para shader ======
+      const shaderCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+      shaderCamera.position.set(0, 0, 1);
+      const shaderScene = new THREE.Scene();
+
+      // ====== Controles ======
+      const controls = {
+        camera: {
+          distance: 12,
+          targetDistance: 12,
+          phi: Math.PI * 0.3,
+          theta: 0,
+          targetPhi: Math.PI * 0.3,
+          targetTheta: 0
+        },
+        damping: 0.08,
+        minDistance: 3,
+        maxDistance: 300,
+        sensitivity: 2,
+        warpSpace: true
+      };
+
+      // ====== NOVAS VARIÁVEIS PARA FUNCIONALIDADES ======
+      let isGravityAltered = false;
+      let gravityMultiplier = 1.0;
+      const miniMeteors = [];
+      let miniMeteorCount = 0;
+
+      // Posição virtual da câmera para os cálculos do shader
+      const virtualCamera = new THREE.Vector3(0, 8, 15);
+
+      // ====== Shader do Buraco Negro (versão simplificada) ======
+      const blackHoleVertexShader = `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position, 1.0);
+        }
+      `;
+
+      const blackHoleFragmentShader = `
+        uniform float uTime;
+        uniform vec3 uCameraPosition;
+        uniform bool uWarpSpace;
+        uniform vec2 uResolution;
+        uniform float uMixFactor;
+        
+        varying vec2 vUv;
+        
+        const float PI = 3.14159265359;
+        
+        float hash(vec3 p) {
+          p = fract(p * 0.3183099 + 0.1);
+          p *= 17.0;
+          return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+        }
+        
+        vec3 blackbody(float temp) {
+          temp = max(temp, 10.0);
+          temp *= 100.0;
+          float r, g, b;
+          
+          if (temp < 3300.0) {
+            r = 1.0;
+            g = max(0.0, 0.39 * pow(max(temp / 1000.0, 0.1), -0.63));
+            b = 0.0;
+          } else if (temp < 6600.0) {
+            r = 1.0;
+            g = max(0.0, 0.39 * pow(max(temp / 1000.0, 0.1), -0.63));
+            b = max(0.0, 1.15 * pow(max(temp / 1000.0 - 19.0, 0.1), -1.5));
+          } else {
+            r = max(0.0, 1.35 * pow(max(temp / 1000.0, 0.1), -0.55));
+            g = max(0.0, 1.00 * pow(max(temp / 1000.0, 0.1), -0.32));
+            b = 1.0;
+          }
+          
+          return vec3(r, g, b);
+        }
+        
+        vec3 calculateStars(vec3 worldDir) {
+          float angleY = uTime * 0.002;
+          mat3 rotation = mat3(cos(angleY), 0, sin(angleY), 
+                              0, 1, 0, 
+                              -sin(angleY), 0, cos(angleY));
+          
+          worldDir = rotation * worldDir;
+          
+          const float scale = 384.0;
+          const float coverage = 0.007;
+          const float maxLuminance = 0.04;
+          
+          vec3 p = worldDir * scale;
+          vec3 i = floor(p);
+          vec3 f = p - i;
+          float r = dot(f - 0.5, f - 0.5);
+          
+          float hashValue = hash(i);
+          float starFactor = step(1.0 - coverage, hashValue);
+          float brightness = maxLuminance * smoothstep(0.25, 0.0, r) * starFactor;
+          
+          float temp = 4000.0 + hashValue * 4000.0;
+          return brightness * blackbody(temp);
+        }
+        
+        void main() {
+          vec2 screenPos = vUv * 2.0 - 1.0;
+          screenPos.x *= uResolution.x / uResolution.y;
+          
+          float distance = length(uCameraPosition);
+          vec3 forward = normalize(-uCameraPosition);
+          vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
+          vec3 up = cross(right, forward);
+          
+          float fov = 0.8 + (1.0 / (distance * 0.1 + 0.1));
+          vec3 rayDir = normalize(forward + screenPos.x * right * fov + screenPos.y * up * fov);
+          
+          // Efeito de distorção gravitacional simples
+          vec3 center = vec3(0.0);
+          float distToCenter = length(uCameraPosition);
+          float gravitationalLensing = 1.0 / (distToCenter * 0.1 + 1.0);
+          
+          // Criar efeito de disco de acreção com shader
+          vec3 result = vec3(0.0);
+          
+          // Ray marching simplificado
+          vec3 rayPos = uCameraPosition;
+          const float steps = 20.0;
+          const float stepSize = 0.5;
+          
+          for (float i = 0.0; i < steps; i++) {
+            rayPos += rayDir * stepSize;
+            
+            float r = length(rayPos.xz);
+            float h = rayPos.y;
+            
+            // Disco de acreção
+            if (r > 2.5 && r < 8.0 && abs(h) < 0.3) {
+              float intensity = 1.0 / (r * r + 0.1);
+              float temp = 50.0 / r;
+              vec3 glow = blackbody(temp) * intensity * 0.1;
+              result += glow;
+            }
+            
+            // Horizonte de eventos
+            if (length(rayPos) < 2.1) {
+              result = vec3(0.0);
+              break;
+            }
+          }
+          
+          // Campo de estrelas
+          vec3 stars = calculateStars(rayDir);
+          
+          vec3 color = stars + result;
+          color = color / (1.0 + color);
+          color = pow(color, vec3(1.0/2.2));
+          
+          gl_FragColor = vec4(color, uMixFactor);
+        }
+      `;
+
+      // ====== Criação do material shader ======
+      const blackHoleMaterial = new THREE.ShaderMaterial({
+        vertexShader: blackHoleVertexShader,
+        fragmentShader: blackHoleFragmentShader,
+        uniforms: {
+          uTime: { value: 0 },
+          uCameraPosition: { value: virtualCamera },
+          uWarpSpace: { value: true },
+          uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+          uMixFactor: { value: 0.6 }
+        },
+        side: THREE.DoubleSide,
+        transparent: true,
+        blending: THREE.AdditiveBlending
+      });
+
+      // Geometria fullscreen para shader
+      const shaderGeometry = new THREE.PlaneGeometry(2, 2);
+      const blackHolePlane = new THREE.Mesh(shaderGeometry, blackHoleMaterial);
+      shaderScene.add(blackHolePlane);
+
+// ====== SISTEMA DE TENTÁCULOS GALÁCTICOS ======
+function createGalacticArms() {
+  const armGeometry = new THREE.BufferGeometry();
+  const armVertices = [];
+  const armColors = [];
+  const armSizes = [];
+  const armData = [];
+  const armCount = 2;
+  const particlesPerArm = 6000;
+  const maxRadius = 150;
+  for (let arm = 0; armCount > arm ? true : false; arm++) {
+    const armAngleOffset = (arm / armCount) * Math.PI * 2;
+    for (let i = 0; i < particlesPerArm; i++) {
+      const t = i / particlesPerArm;
+      const radius = 8 + t * maxRadius;
+      const spiralTightness = 1.5;
+      const angle = armAngleOffset - t * Math.PI * 6 * spiralTightness;
+      const armWidth = 2 + Math.sin(t * Math.PI * 8) * 1.5;
+      const randomOffset = (Math.random() - 0.5) * armWidth;
+      const perpAngle = angle + Math.PI / 2;
+      const x = radius * Math.cos(angle) + randomOffset * Math.cos(perpAngle);
+      const z = radius * Math.sin(angle) + randomOffset * Math.sin(perpAngle);
+      const y = (Math.random() - 0.5) * Math.max(0.5, radius * 0.03);
+      armVertices.push(x, y, z);
+const cRoxo = new THREE.Color(0x7A2CF0);
+const cRosa = new THREE.Color(0xFF00AA);
+const g = Math.pow(t, 0.85);
+const col = cRoxo.clone().lerp(cRosa, g);
+armColors.push(col.r, col.g, col.b);
+      armSizes.push(0.2 + Math.random() * 0.6);
+      armData.push({
+        baseRadius: radius,
+        baseAngle: angle,
+        armIndex: arm,
+        spiralPosition: t,
+        orbitalSpeed: 0.15 / Math.sqrt(radius / 8.0),
+        randomPhase: Math.random() * Math.PI * 2
+      });
+    }
+  }
+  armGeometry.setAttribute('position', new THREE.Float32BufferAttribute(armVertices, 3));
+  armGeometry.setAttribute('color',    new THREE.Float32BufferAttribute(armColors, 3));
+  armGeometry.setAttribute('size',     new THREE.Float32BufferAttribute(armSizes, 1));
+  const armMaterial = new THREE.ShaderMaterial({
+    transparent: true,
+    depthTest: true,  
+    depthWrite: false, 
+    blending: THREE.AdditiveBlending,
+    vertexColors: true,
+    vertexShader: `
+      attribute float size;
+      varying vec3 vColor;
+      varying float vDistance;
+      void main() {
+        vColor = color;
+        vDistance = length(position);
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * (100.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vDistance;
+      void main() {
+        vec2 center = gl_PointCoord - vec2(0.5);
+        float dist = length(center);
+        if (dist > 0.5) discard;
+        float opacity = (1.0 - smoothstep(0.0, 0.5, dist)) * 0.4;
+        float core    = (1.0 - smoothstep(0.0, 0.2, dist)) * 0.6;
+        float maxDistance = 150.0;
+        float fadeFactor = 1.0 - clamp(vDistance / maxDistance, 0.0, 1.0);
+        float a = (opacity + core) * fadeFactor;
+        vec3 col = vColor * a;
+        gl_FragColor = vec4(col, a);
+      }
+    `
+  });
+  armMaterial.premultipliedAlpha = true;
+  armMaterial.needsUpdate = true;
+  const galacticArms = new THREE.Points(armGeometry, armMaterial);
+  galacticArms.renderOrder = 800;
+  scene.add(galacticArms);
+  return { mesh: galacticArms, geometry: armGeometry, data: armData };
+}
+const galacticArmSystem = createGalacticArms();
+      // ====== Campo de estrelas de fundo ======
+      function createStarField() {
+        const starGeometry = new THREE.BufferGeometry();
+        const starVertices = [];
+        const starColors = [];
+        
+        for (let i = 0; i < 4000; i++) {
+          const radius = 500 + Math.random() * 1500;
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.random() * Math.PI;
+          
+          const x = radius * Math.sin(phi) * Math.cos(theta);
+          const y = radius * Math.sin(phi) * Math.sin(theta);
+          const z = radius * Math.cos(phi);
+          
+          starVertices.push(x, y, z);
+          
+          const temp = Math.random();
+          const r = temp > 0.7 ? 1 : 0.8 + temp * 0.2;
+          const g = temp > 0.5 ? 0.9 + temp * 0.1 : 0.7 + temp * 0.3;
+          const b = temp < 0.3 ? 1 : 0.6 + temp * 0.4;
+          starColors.push(r, g, b);
+        }
+        
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        starGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
+        
+        const starMaterial = new THREE.PointsMaterial({
+          size: 2,
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.8
+        });
+        
+        return new THREE.Points(starGeometry, starMaterial);
+      }
+
+      const starField = createStarField();
+      scene.add(starField);
+	  const sphericalComets = new SphericalCometManager(scene, SPHERICAL_COMET_CONFIG);
+
+      // ====== SISTEMA DE CALDAS DE POEIRA PARA PARTÍCULAS DISTANTES ======
+      function createDustTails() {
+        const dustTailGeometry = new THREE.BufferGeometry();
+        const dustVertices = [];
+        const dustColors = [];
+        const dustSizes = [];
+        const dustOpacities = [];
+        
+        // Criar caldas de poeira para partículas mais distantes
+        const dustParticleCount = 5000;
+        
+        for (let i = 0; i < dustParticleCount; i++) {
+          // Focar em raios maiores (Via Láctea)
+          const radius = 15 + Math.random() * 40;
+          const angle = Math.random() * Math.PI * 2;
+          const height = (Math.random() - 0.5) * Math.max(0.3, radius * 0.02);
+          
+          const x = radius * Math.cos(angle);
+          const y = height;
+          const z = radius * Math.sin(angle);
+          
+          dustVertices.push(x, y, z);
+          
+          // Cores de poeira cósmica - mais escuras e avermelhadas
+          const dustIntensity = 0.2 + Math.random() * 0.3;
+          dustColors.push(
+            0.4 + dustIntensity * 0.6,  // R
+            0.3 + dustIntensity * 0.4,  // G
+            0.2 + dustIntensity * 0.3   // B
+          );
+          
+          // Tamanhos variados para criar caldas
+          dustSizes.push(0.1 + Math.random() * 0.4);
+          dustOpacities.push(0.1 + Math.random() * 0.2);
+        }
+        
+        dustTailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
+        dustTailGeometry.setAttribute('color', new THREE.Float32BufferAttribute(dustColors, 3));
+        dustTailGeometry.setAttribute('size', new THREE.Float32BufferAttribute(dustSizes, 1));
+        
+        const dustMaterial = new THREE.ShaderMaterial({
+         transparent: true,
+    depthTest: true,  
+    depthWrite: false, 
+          blending: THREE.AdditiveBlending,
+          vertexColors: true,
+          vertexShader: `
+            attribute float size;
+            varying vec3 vColor;
+            varying float vSize;
+            
+            void main() {
+              vColor = color;
+              vSize = size;
+              vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+              gl_PointSize = size * (150.0 / -mvPosition.z);
+              gl_Position = projectionMatrix * mvPosition;
+            }
+          `,
+          fragmentShader: `
+            varying vec3 vColor;
+            varying float vSize;
+            
+            void main() {
+              vec2 center = gl_PointCoord - vec2(0.5);
+              float dist = length(center);
+              
+              if (dist > 0.5) discard;
+              
+              // Criar efeito de névoa/cauda
+              float opacity = (1.0 - smoothstep(0.0, 0.5, dist)) * 0.15;
+              
+              gl_FragColor = vec4(vColor, opacity);
+            }
+          `
+        });
+        
+        const dustTails = new THREE.Points(dustTailGeometry, dustMaterial);
+        scene.add(dustTails);
+        
+        return { mesh: dustTails, geometry: dustTailGeometry, particleCount: dustParticleCount };
+      }
+
+      const dustTailSystem = createDustTails();
+
+      // ====== Buraco Negro - Horizonte de eventos ======
+      const blackHoleGeometry = new THREE.SphereGeometry(2, 64, 64);
+      const blackHolePhysicsMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x000000,
+        transparent: true,
+        opacity: 1
+      });
+      const blackHole = new THREE.Mesh(blackHoleGeometry, blackHolePhysicsMaterial);
+      scene.add(blackHole);
+
+      // ====== Sistema de disco de acreção ======
+      const accretionRings = [];
+      
+      function createAccretionDisk() {
+        const ringCount = 12;
+        
+        for (let ring = 0; ring < ringCount; ring++) {
+          const innerRadius = 2.5 + ring * 0.4;
+          const outerRadius = innerRadius + 0.3;
+          
+          const segments = 64;
+          const geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments, 1);
+          
+          const temperature = Math.pow(1 - (ring / ringCount), 0.8);
+          let color;
+          
+          if (temperature > 0.9) {
+            color = new THREE.Color(1, 0.95, 0.8);
+          } else if (temperature > 0.7) {
+            color = new THREE.Color(1, 0.9, 0.3);
+          } else if (temperature > 0.4) {
+            color = new THREE.Color(1, 0.5, 0.1);
+          } else {
+            color = new THREE.Color(1, 0.2, 0.05);
+          }
+          
+          const material = new THREE.MeshBasicMaterial({
+            color: color,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.3 + temperature * 0.5,
+            blending: THREE.AdditiveBlending
+          });
+          
+          const ringMesh = new THREE.Mesh(geometry, material);
+          ringMesh.rotation.x = -Math.PI / 2;
+          ringMesh.rotation.z = (Math.random() - 0.5) * 0.1;
+          
+          const orbitalSpeed = 0.03 / Math.sqrt(innerRadius / 2.5);
+          
+          accretionRings.push({
+            mesh: ringMesh,
+            radius: innerRadius,
+            speed: orbitalSpeed,
+            baseSpeed: orbitalSpeed,
+            angle: Math.random() * Math.PI * 2,
+            wobble: (Math.random() - 0.5) * 0.02,
+            wobbleSpeed: 0.005 + Math.random() * 0.01
+          });
+          
+          scene.add(ringMesh);
+        }
+      }
+
+      createAccretionDisk();
+
+      // ====== Sistema de meteoros com caudas ======
+      const meteorSystem = {
+        geometry: new THREE.BufferGeometry(),
+        material: new THREE.ShaderMaterial({
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          vertexColors: true,
+          vertexShader: `
+            attribute float size;
+            attribute float brightness;
+            attribute float trail;
+            varying vec3 vColor;
+            varying float vBrightness;
+            varying float vTrail;
+            
+            void main() {
+              vColor = color;
+              vBrightness = brightness;
+              vTrail = trail;
+              vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+              // Tamanho menor e mais controlado
+              gl_PointSize = size * (200.0 / -mvPosition.z);
+              gl_Position = projectionMatrix * mvPosition;
+            }
+          `,
+          fragmentShader: `
+            varying vec3 vColor;
+            varying float vBrightness;
+            varying float vTrail;
+            
+            void main() {
+              vec2 center = gl_PointCoord - vec2(0.5);
+              float dist = length(center);
+              
+              // Descartar pixels fora do círculo para evitar quadrados
+              if (dist > 0.5) discard;
+              
+              // Criar formato circular suave
+              float core = 1.0 - smoothstep(0.0, 0.3, dist);
+              float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+              
+              // Combinar núcleo e brilho
+              float opacity = (core * 0.8 + glow * 0.2) * vBrightness;
+              opacity = smoothstep(0.0, 1.0, opacity);
+              
+              // Intensificar o centro
+              float centerBoost = 1.0 - smoothstep(0.0, 0.15, dist);
+              vec3 finalColor = vColor * (1.0 + centerBoost * 0.5);
+              
+              gl_FragColor = vec4(finalColor, opacity);
+            }
+          `
+        }),
+        data: []
+      };
+
+      function createMeteorParticles() {
+        const meteorCount = 11690;
+        const positions = [];
+        const colors = [];
+        const sizes = [];
+        const brightnesses = [];
+        const trails = [];
+        for (let i = 0; i < meteorCount; i++) {
+  const randomFactor = Math.pow(Math.random(), 0.25);
+  const radius = 2.5 + randomFactor * 25;
+  const angle = Math.random() * Math.PI * 2;
+  const height = (Math.random() - 0.5) * Math.max(0.08, radius * 0.04);
+  const x = radius * Math.cos(angle);
+  const y = height;
+  const z = radius * Math.sin(angle);
+  const temperature = Math.pow(2.5 / radius, 0.5);
+  const velocity = Math.sqrt(15 / radius);
+  let r, g, b;
+  if (temperature > 0.85) {
+    r = 1.0; g = 1.0; b = 0.0 + (temperature - 0.85) * 0.5;
+  } else if (temperature > 0.4) {
+    const t = (temperature - 0.5) / 0.35;
+    r = 1.0; g = 0.7 + t * 0.6; b = 0.0;
+  } else {
+    r = 1.0; g = temperature * 1.1; b = 0.0;
+  }
+  const baseSize = 0.3 + temperature * 0.8;
+  const size = baseSize * (0.8 + Math.random() * 0.4);
+  let brightness = 0.5 + temperature * 0.5 + Math.random() * 0.3;
+  const startFadeRadius = 22;
+  const maxRadius = 30;
+  if (radius > startFadeRadius) {
+    const fadeFactor = 1 - ((radius - startFadeRadius) / (maxRadius - startFadeRadius));
+    brightness *= Math.max(0.0, Math.min(1.0, fadeFactor));
+  }
+  if (brightness < 0.2) continue;
+  positions.push(x, y, z);
+  colors.push(r, g, b);
+  sizes.push(size);
+  brightnesses.push(brightness);
+  const trail = 0.3 + velocity * 0.2 + Math.random() * 0.4;
+  trails.push(trail);
+  meteorSystem.data.push({
+    radius,
+    angle,
+    height,
+    baseHeight: height,
+    orbitalSpeed: velocity / radius * 0.8,
+    baseOrbitalSpeed: velocity / radius * 0.8,
+    temperature,
+    turbulence: Math.random() * 0.02,
+    phase: Math.random() * Math.PI * 2,
+    wobbleSpeed: 0.008 + Math.random() * 0.025,
+    brightnessFactor: brightness,
+    trailLength: trail,
+    flickerSpeed: 1 + Math.random() * 3
+  });
+}
+        meteorSystem.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        meteorSystem.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        meteorSystem.geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+        meteorSystem.geometry.setAttribute('brightness', new THREE.Float32BufferAttribute(brightnesses, 1));
+        meteorSystem.geometry.setAttribute('trail', new THREE.Float32BufferAttribute(trails, 1));
+meteorSystem.material.transparent = true;
+meteorSystem.material.depthTest   = true;
+meteorSystem.material.depthWrite  = false;
+meteorSystem.material.blending    = THREE.AdditiveBlending;
+meteorSystem.material.alphaTest   = 0.15;
+meteorSystem.material.needsUpdate = true;
+        const meteors = new THREE.Points(meteorSystem.geometry, meteorSystem.material);
+        scene.add(meteors);
+        return meteors;
+      }
+
+      const realisticMeteors = createMeteorParticles();
+
+// ====== MINI METEORO COM CAUDA VISÍVEL ======
+function createMiniMeteor(x, y, z) {
+  const miniMeteorGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+  const miniMeteorMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+  });
+  const miniMeteor = new THREE.Mesh(miniMeteorGeometry, miniMeteorMaterial);
+  miniMeteor.position.set(x, y, z);
+  scene.add(miniMeteor);
+  const trailSegments = 25;
+  const trailGeometry = new THREE.BufferGeometry();
+const positions = new Float32Array(trailSegments * 3);
+const colors    = new Float32Array(trailSegments * 3);
+trailGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+trailGeometry.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+trailGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+  for (let i = 0; i < trailSegments; i++) {
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+    const fade = i / trailSegments;
+    colors[i * 3] = (1.0 - fade) * 1.0;
+    colors[i * 3 + 1] = (1.0 - fade) * 0.4;
+    colors[i * 3 + 2] = (1.0 - fade) * 0.1;
+  }
+  trailGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  trailGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const trailMaterial = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    linewidth: 2,
+  });
+  const trailMesh = new THREE.Line(trailGeometry, trailMaterial);
+  trailMesh.renderOrder = 999;
+  trailMesh.frustumCulled = false;
+  scene.add(trailMesh);
+  miniMeteors.push({
+    mesh: miniMeteor,
+    trailMesh,
+    trailGeometry,
+    positions,
+    colors,
+    life: 30.0,
+    position: new THREE.Vector3(x, y, z),
+    velocity: new THREE.Vector3(0, 0, 0),
+  });
+  miniMeteorCount++;
+}
+
+function updateMiniMeteors(deltaTime) {
+  for (let i = miniMeteors.length - 1; i >= 0; i--) {
+    const meteor = miniMeteors[i];
+    const { position, velocity, trailMesh, trailGeometry, positions, colors } = meteor;
+
+    // Gravidade e impulso (código original)
+    const distanceToCenter = position.length();
+    if (distanceToCenter > 0.1) {
+      const gravityStrength = 10.0 / (distanceToCenter * distanceToCenter + 0.3);
+      const gravityDirection = position.clone().normalize().multiplyScalar(-1);
+      velocity.add(gravityDirection.multiplyScalar(gravityStrength * deltaTime));
+    }
+
+    if (velocity.length() < 2.0) {
+      const initialBoost = position.clone().normalize().multiplyScalar(-2.0);
+      velocity.add(initialBoost.multiplyScalar(deltaTime * 0.5));
+    }
+
+    position.add(velocity.clone().multiplyScalar(deltaTime));
+    meteor.mesh.position.copy(position);
+
+    // Atualização da cauda de forma performática e robusta
+    const trailSegments = positions.length / 3;
+    const positionAttribute = trailGeometry.attributes.position;
+    
+    // Move cada ponto para a posição do ponto anterior, criando o rastro
+    for (let j = trailSegments - 1; j > 0; j--) {
+        positionAttribute.setX(j, positionAttribute.getX(j-1));
+        positionAttribute.setY(j, positionAttribute.getY(j-1));
+        positionAttribute.setZ(j, positionAttribute.getZ(j-1));
+    }
+
+    // Define o primeiro ponto para a posição atual do meteoro
+    positionAttribute.setX(0, position.x);
+    positionAttribute.setY(0, position.y);
+    positionAttribute.setZ(0, position.z);
+
+    positionAttribute.needsUpdate = true;
+    
+    // Fade gradual e vida (código original)
+    const opacity = 0.6 + Math.min(velocity.length() / 10, 0.4);
+    trailMesh.material.opacity = opacity;
+
+    meteor.life -= deltaTime * 15;
+    if (distanceToCenter < 1) {
+      scene.remove(meteor.mesh);
+      scene.remove(meteor.trailMesh);
+      miniMeteors.splice(i, 1);
+      miniMeteorCount--;
+    }
+  }
+}
+      // ====== Jatos relativísticos ======
+      function createRelativisticJets() {
+        const jets = [];
+        
+        for (let j = 0; j < 2; j++) {
+          const jetGeometry = new THREE.ConeGeometry(0.2, 25, 8);
+          const jetMaterial = new THREE.MeshBasicMaterial({
+            color: j === 0 ? 0x00aaff : 0x0088cc,
+            transparent: true,
+            opacity: 0.5,
+            blending: THREE.AdditiveBlending
+          });
+          
+          const jet = new THREE.Mesh(jetGeometry, jetMaterial);
+          jet.position.y = j === 0 ? 12.5 : -12.5;
+          if (j === 1) jet.rotation.x = Math.PI;
+          
+          scene.add(jet);
+          jets.push(jet);
+        }
+        
+        return jets;
+      }
+
+      const jets = createRelativisticJets();
+
+      // ====== Sistema de controle ======
+      let isMouseDown = false;
+      let isRightMouseDown = false;
+      let lastMouseX = 0;
+      let lastMouseY = 0;
+      let lastClickTime = 0;
+
+      // ====== NOVOS CONTROLES DE MOUSE ======
+      document.addEventListener('mousedown', (event) => {
+        if (event.button === 0) { // Botão esquerdo
+          isMouseDown = true;
+        } else if (event.button === 2) { // Botão direito
+          event.preventDefault();
+          isRightMouseDown = true;
+          isGravityAltered = true;
+          gravityMultiplier = 3.0;
+          document.getElementById('gravity-status').textContent = '2,5x';
+        }
+        lastMouseX = event.clientX;
+        lastMouseY = event.clientY;
+      });
+
+      document.addEventListener('mouseup', (event) => {
+        if (event.button === 0) {
+          isMouseDown = false;
+        } else if (event.button === 2) {
+          isRightMouseDown = false;
+          isGravityAltered = false;
+          gravityMultiplier = 1.0;
+          document.getElementById('gravity-status').textContent = '1x';
+        }
+      });
+
+      // Prevenir menu de contexto do botão direito
+      document.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+      });
+
+      // ====== DUPLO CLIQUE PARA CRIAR MINI METEORO ======
+      document.addEventListener('dblclick', (event) => {
+        // Converter coordenadas da tela para coordenadas 3D
+        const mouse = new THREE.Vector2();
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, camera);
+        
+        // Criar meteoro na direção do clique, a uma distância da câmera
+        const direction = raycaster.ray.direction.clone();
+        const startPosition = camera.position.clone().add(direction.multiplyScalar(5));
+        
+        createMiniMeteor(startPosition.x, startPosition.y, startPosition.z);
+      });
+
+      document.addEventListener('mousemove', (event) => {
+        if (isMouseDown && !isRightMouseDown) {
+          const deltaX = event.clientX - lastMouseX;
+          const deltaY = event.clientY - lastMouseY;
+          
+          controls.camera.targetTheta -= deltaX * 0.005 * controls.sensitivity;
+          controls.camera.targetPhi = Math.max(0.1, Math.min(Math.PI - 0.1, 
+            controls.camera.targetPhi + deltaY * 0.005 * controls.sensitivity));
+          
+          lastMouseX = event.clientX;
+          lastMouseY = event.clientY;
+        }
+      });
+
+      document.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        const zoomDelta = event.deltaY > 0 ? 1.1 : 0.9;
+        controls.camera.targetDistance = Math.max(controls.minDistance, 
+          Math.min(controls.maxDistance, controls.camera.targetDistance * zoomDelta));
+      });
+
+	
+
+      // Botões de controle
+      document.getElementById('reset').addEventListener('click', (e) => {
+        e.preventDefault();
+        controls.camera.targetDistance = 12;
+        controls.camera.targetPhi = Math.PI * 0.3;
+        controls.camera.targetTheta = 0;
+      });
+
+      document.getElementById('toggle-warp').addEventListener('click', (e) => {
+        e.preventDefault();
+        controls.warpSpace = !controls.warpSpace;
+        blackHoleMaterial.uniforms.uWarpSpace.value = controls.warpSpace;
+
+      });
+
+      // ====== Loop de animação ======
+      let time = 0;
+      let frameCount = 0;
+      let lastTime = Date.now();
+
+      function updateCamera() {
+        controls.camera.distance += (controls.camera.targetDistance - controls.camera.distance) * controls.damping;
+        controls.camera.phi += (controls.camera.targetPhi - controls.camera.phi) * controls.damping;
+        controls.camera.theta += (controls.camera.targetTheta - controls.camera.theta) * controls.damping;
+        
+        const x = controls.camera.distance * Math.sin(controls.camera.phi) * Math.cos(controls.camera.theta);
+        const y = controls.camera.distance * Math.cos(controls.camera.phi);
+        const z = controls.camera.distance * Math.sin(controls.camera.phi) * Math.sin(controls.camera.theta);
+        
+        camera.position.set(x, y, z);
+        camera.lookAt(0, 0, 0);
+        
+        virtualCamera.copy(camera.position);
+      }
+
+      function animate() {
+        const currentTime = Date.now();
+        const deltaTime = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+        
+        time += deltaTime;
+        frameCount++;
+sphericalComets.update(deltaTime);
+        updateCamera();
+
+        // Atualizar uniforms do shader
+        blackHoleMaterial.uniforms.uTime.value = time;
+        blackHoleMaterial.uniforms.uCameraPosition.value.copy(virtualCamera);
+
+        // ====== ATUALIZAR MINI METEOROS ======
+        updateMiniMeteors(deltaTime);
+
+        // ====== ANIMAÇÃO APRIMORADA DO DISCO DE ACREÇÃO ======
+        accretionRings.forEach((ring, index) => {
+          // Velocidade aumentada para partículas próximas + efeito de gravidade alterada
+          let speedMultiplier = 1.0;
+          if (ring.radius < 5.0) {
+            speedMultiplier = 2.0 + (5.0 - ring.radius) * 0.5; // Partículas próximas mais rápidas
+          }
+          if (isGravityAltered) {
+            speedMultiplier *= gravityMultiplier;
+          }
+          
+          ring.angle += ring.baseSpeed * speedMultiplier * deltaTime;
+          ring.mesh.rotation.y = ring.angle;
+          
+          const wobble = Math.sin(time * ring.wobbleSpeed + index) * ring.wobble;
+          ring.mesh.rotation.x = -Math.PI / 2 + wobble;
+          
+          const baseOpacity = 0.3 + (1 - index / accretionRings.length) * 0.5;
+          let opacity = baseOpacity + Math.sin(time * 0.5 + index) * 0.1;
+          
+          // Efeito visual da gravidade alterada
+          if (isGravityAltered && ring.radius < 8.0) {
+            opacity *= 0.6;
+            const pulsation = Math.sin(time * 8 + index * 0.5) * 0.3;
+            opacity += pulsation;
+          }
+          
+          ring.mesh.material.opacity = Math.max(0.1, Math.min(1.0, opacity));
+        });
+
+        // ====== MOVIMENTO SUPER RÁPIDO DOS METEOROS ======
+        const positions = realisticMeteors.geometry.attributes.position.array;
+        const brightnesses = realisticMeteors.geometry.attributes.brightness.array;
+        const trails = realisticMeteors.geometry.attributes.trail.array;
+        
+        for (let i = 0; i < meteorSystem.data.length; i++) {
+          const meteor = meteorSystem.data[i];
+          const i3 = i * 3;
+          
+          // Velocidade drasticamente aumentada para partículas próximas
+          let speedMultiplier = 1.0;
+          if (meteor.radius < 8.0) {
+            speedMultiplier = 3.0 + (8.0 - meteor.radius) * 1.5; // Muito mais rápido
+          } else if (meteor.radius < 12.0) {
+            speedMultiplier = 1.5; // Velocidade média
+          }
+          
+          if (isGravityAltered) {
+            speedMultiplier *= gravityMultiplier;
+          }
+          
+          meteor.angle += meteor.baseOrbitalSpeed * speedMultiplier * deltaTime;
+          
+          // Turbulência gravitacional
+          const turbulence = Math.sin(time * meteor.wobbleSpeed + meteor.phase) * meteor.turbulence;
+          const currentHeight = meteor.baseHeight + turbulence;
+          
+          // Efeito de "arrasto" gravitacional
+          let radiusModifier = 1;
+          if (controls.warpSpace && meteor.radius < 6) {
+            const gravityEffect = 1 / (meteor.radius * meteor.radius + 0.8);
+            radiusModifier += Math.sin(time * 2.5 + meteor.phase) * gravityEffect * 0.08;
+          }
+          
+          // Efeito adicional da gravidade alterada
+          if (isGravityAltered && meteor.radius < 10.0) {
+            const alterationEffect = 1 / (meteor.radius + 1.0);
+            radiusModifier += Math.sin(time * 5 + meteor.phase) * alterationEffect * 0.15;
+          }
+          
+            const currentRadius = meteor.radius * radiusModifier;
+          let x = currentRadius * Math.cos(meteor.angle);
+          let y = currentHeight;
+          let z = currentRadius * Math.sin(meteor.angle);
+
+          // ====== NOVA LÓGICA: ATRAÇÃO SUAVE E ESTÁVEL DOS MINI METEOROS ======
+          const currentPos = new THREE.Vector3(x, y, z);
+          const totalForce = new THREE.Vector3();
+
+          for (const miniMeteor of miniMeteors) {
+            const miniMeteorPos = miniMeteor.position;
+            const direction = new THREE.Vector3().subVectors(miniMeteorPos, currentPos);
+            const distance = direction.length();
+            
+            const attractionDistance = 2.0; // Distância máxima para a atração
+            const minDistance = 0.2; // Distância mínima para evitar bugs
+            const strength = 0.0018; // Intensidade da força
+
+            if (distance < attractionDistance && distance > minDistance) {
+              const forceMagnitude = strength / (distance * distance);
+              totalForce.add(direction.normalize().multiplyScalar(forceMagnitude));
+            }
+          }
+
+          if (totalForce.length() > 0) {
+            // Projeta a força no plano da órbita (plano XZ)
+            const planarForce = new THREE.Vector3(totalForce.x, 0, totalForce.z);
+            
+            // Separa a força em componentes radial e tangencial
+            const radialDirection = new THREE.Vector3(x, 0, z).normalize();
+            const tangentialDirection = new THREE.Vector3(-z, 0, x).normalize();
+            
+            const radialStrength = planarForce.dot(radialDirection);
+            const tangentialStrength = planarForce.dot(tangentialDirection);
+
+             // Aplica os ajustes aos parâmetros de órbita
+            // O sinal foi invertido para garantir a atração
+            meteor.radius -= radialStrength * 50 * deltaTime; 
+            meteor.angle -= tangentialStrength * 50 * deltaTime;
+          }
+          
+          // Limita o raio para não colapsar a órbita
+          meteor.radius = Math.max(meteor.radius, 5);
+
+          // Re-calcula a posição final com os parâmetros ajustados
+          x = meteor.radius * Math.cos(meteor.angle);
+          y = currentHeight;
+          z = meteor.radius * Math.sin(meteor.angle);
+
+          positions[i3] = x;
+          positions[i3 + 1] = y;
+          positions[i3 + 2] = z;
+		  
+          // Variação de brilho com cintilação
+          const flickering = Math.sin(time * meteor.flickerSpeed + meteor.phase * 2) * 0.3;
+          let brightnessVariation = 1 + Math.sin(time * 1.8 + meteor.phase) * 0.4 + flickering;
+          
+          // Brilho aumentado durante alteração de gravidade
+          if (isGravityAltered && meteor.radius < 8.0) {
+            brightnessVariation *= 1.9;
+          }
+          
+          brightnesses[i] = meteor.brightnessFactor * brightnessVariation;
+          
+          // Variação do comprimento da cauda baseada na velocidade
+          const velocityFactor = meteor.baseOrbitalSpeed * speedMultiplier * 50;
+          const trailVariation = 1 + Math.sin(time * 0.5 + meteor.phase) * 0.3;
+          trails[i] = meteor.trailLength * velocityFactor * trailVariation;
+        }
+        
+        realisticMeteors.geometry.attributes.position.needsUpdate = true;
+        realisticMeteors.geometry.attributes.brightness.needsUpdate = true;
+        realisticMeteors.geometry.attributes.trail.needsUpdate = true;
+
+       // ====== ANIMAÇÃO DOS BRAÇOS GALÁCTICOS - ROTACAO UNIFORME ======
+        const armPositions = galacticArmSystem.geometry.attributes.position.array;
+        const armData = galacticArmSystem.data;
+        const rotationSpeed = 0.05; // Velocidade de rotação fixa. Ajuste este valor.
+
+        // Reinicia a rotação em 0 para recalcular as posições corretamente
+        galacticArmSystem.rotationAngle = (galacticArmSystem.rotationAngle || 0) + rotationSpeed * deltaTime;
+        
+        for (let i = 0; i < armData.length; i++) {
+          const particle = armData[i];
+          const i3 = i * 3;
+          
+          // Apenas a rotação global é aplicada, a forma original da espiral é mantida
+          const currentAngle = particle.baseAngle + galacticArmSystem.rotationAngle;
+          
+          // Variação dinâmica do braço
+          const armWidth = 2 + Math.sin(time * 0.5 + particle.randomPhase) * 1.5;
+          const randomOffset = Math.sin(time * 0.3 + particle.randomPhase * 2) * armWidth * 0.5;
+          const perpAngle = currentAngle + Math.PI / 2;
+          
+          armPositions[i3] = particle.baseRadius * Math.cos(currentAngle) + randomOffset * Math.cos(perpAngle);
+          armPositions[i3 + 2] = particle.baseRadius * Math.sin(currentAngle) + randomOffset * Math.sin(perpAngle);
+          // Y permanece o mesmo
+        }
+        
+        galacticArmSystem.geometry.attributes.position.needsUpdate = true;
+
+        // ====== ANIMAÇÃO DAS CALDAS DE POEIRA ======
+        const dustPositions = dustTailSystem.geometry.attributes.position.array;
+        
+        for (let i = 0; i < dustTailSystem.particleCount; i++) {
+          const i3 = i * 3;
+          const currentRadius = Math.sqrt(dustPositions[i3] * dustPositions[i3] + dustPositions[i3 + 2] * dustPositions[i3 + 2]);
+          
+          // Movimento lento para criar efeito de caldas
+          const slowSpeed = 0.1 / Math.sqrt(currentRadius / 15.0);
+          const angle = Math.atan2(dustPositions[i3 + 2], dustPositions[i3]) + slowSpeed * deltaTime;
+          
+          dustPositions[i3] = currentRadius * Math.cos(angle);
+          dustPositions[i3 + 2] = currentRadius * Math.sin(angle);
+        }
+        
+        dustTailSystem.geometry.attributes.position.needsUpdate = true;
+
+        // Rotação das estrelas
+        starField.rotation.y += 0.00005;
+
+        // Animação dos jatos
+        if (Array.isArray(jets)) {
+  const ax = Math.sin(time * 0.4) * 0.03;
+  const az = Math.cos(time * 0.4) * 0.03;
+  jets.forEach((jet) => {
+    if (!jet || !jet.geometry) return;
+    if (!jet.userData.baseQuat) {
+      jet.userData.baseQuat = jet.quaternion.clone();
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(jet.userData.baseQuat);
+      jet.userData.sign = (up.y >= 0 ? 1 : -1);
+      let H = jet.geometry.parameters?.height;
+      if (H == null) {
+        jet.geometry.computeBoundingBox();
+        H = jet.geometry.boundingBox.max.y - jet.geometry.boundingBox.min.y;
+      }
+      jet.userData.H = H || 25;
+    }
+    const sign = jet.userData.sign;
+    const H = jet.userData.H;
+    const qDelta = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0, 0, sign * az, 'XYZ')
+    );
+    jet.quaternion.copy(jet.userData.baseQuat).multiply(qDelta);
+    const baseLocal = new THREE.Vector3(0, -H * 0.5, 0).applyQuaternion(jet.quaternion);
+    jet.position.copy(baseLocal).multiplyScalar(-1);
+  });
+}
+        // Renderização baseada no modo
+        renderer.clear();
+
+        if (currentMode === renderModes.SHADER_ONLY) {
+          blackHoleMaterial.uniforms.uMixFactor.value = 1.0;
+          renderer.render(shaderScene, shaderCamera);
+        } else if (currentMode === renderModes.PHYSICS_ONLY) {
+          renderer.render(scene, camera);
+        } else {
+          blackHoleMaterial.uniforms.uMixFactor.value = 0.4;
+          renderer.render(scene, camera);
+          renderer.render(shaderScene, shaderCamera);
+        }
+
+        // Debug info
+        if (frameCount % 60 === 0) {
+          document.getElementById('distance').textContent = controls.camera.distance.toFixed(1);
+
+          document.getElementById('mini-meteors').textContent = miniMeteorCount;
+          document.getElementById('fps').textContent = Math.round(1 / deltaTime);
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      // ====== Redimensionamento ======
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        blackHoleMaterial.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+      });
+	  
+	  // ====== Esconde Menu Debug ======
+	    document.getElementById('toggle-debug').addEventListener('click', (e) => {
+    e.preventDefault();
+    const debugPanel = document.getElementById('debug');
+    if (debugPanel.style.display === 'none') {
+      debugPanel.style.display = 'block';
+    } else {
+      debugPanel.style.display = 'none';
+    }
+  });
+
+      // Iniciar
+      animate();
+
+      console.log('Buraco Negro Híbrido Aprimorado carregado!');
+      console.log(`Meteoros: ${meteorSystem.data.length}`);
+      console.log(`Anéis de acreção: ${accretionRings.length}`);
+      console.log(`Partículas de poeira: ${dustTailSystem.particleCount}`);
+      console.log(`Braços galácticos: ${galacticArmSystem.data.length} partículas`);
+      console.log('Modos: Híbrido | Shader Only | Física Only');
+      console.log('Sistema híbrido de renderização ativo!');
+      console.log('FUNCIONALIDADES APRIMORADAS:');
+      console.log('- Mini meteoros com vida longa (corrigido)');
+      console.log('- Velocidade super aumentada para partículas próximas');
+      console.log('- Braços espirais galácticos dinâmicos');
+      console.log('- Caldas de poeira nas partículas distantes');
+      console.log('- Duplo clique: Criar mini meteoro');
+      console.log('- Botão direito: Alterar gravidade');
+    </script>
+  </body>
+</html>
