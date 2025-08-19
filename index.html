@@ -166,13 +166,22 @@ function applyCoversMuted(flag) {
 }
 
 // — pedir fullscreen no primeiro gesto (quando permitido pelo navegador)
+const isPhoneLike = /Android.+Mobile|iPhone|iPod/i.test(navigator.userAgent || "");
+
 let triedFS = false;
 function requestFSOnce() {
-  if (triedFS) return;
+  if (!isPhoneLike) return;
+  if (document.fullscreenElement || triedFS) return;
   triedFS = true;
-  const el = document.documentElement;
+
+  const el = renderer.domElement; // canvas
   const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  if (req) { try { req.call(el); } catch(e){} }
+  if (req) {
+    Promise.resolve(req.call(el)).catch(err => {
+      console.warn('Fullscreen negado:', err.name, err.message);
+      triedFS = false; // deixa tentar de novo se falhar
+    });
+  }
 }
 canvas.addEventListener('touchstart', requestFSOnce, { passive:false });
 
@@ -1371,3 +1380,4 @@ sphericalComets.update(deltaTime);
     </script>
   </body>
 </html>
+
