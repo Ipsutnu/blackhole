@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <!-- iOS: permitir webapp fullscreen ao “Adicionar à Tela de Início” -->
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Blackhole</title>
 	<link rel="icon" href="icon.png" type="image/png">
@@ -167,7 +167,12 @@ function applyCoversMuted(flag) {
 
 // — pedir fullscreen no primeiro gesto (quando permitido pelo navegador)
 const isPhoneLike = /Android.+Mobile|iPhone|iPod/i.test(navigator.userAgent || "");
-
+document.addEventListener('DOMContentLoaded', () => {
+    if (isPhoneLike) {
+      const hint = document.getElementById('hint');
+      if (hint) hint.style.display = 'none';
+    }
+  });
 let triedFS = false;
 function requestFSOnce() {
   if (!isPhoneLike) return;
@@ -1380,4 +1385,5 @@ sphericalComets.update(deltaTime);
     </script>
   </body>
 </html>
+
 
