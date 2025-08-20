@@ -1,9 +1,11 @@
+<!-- SPDX-License-Identifier: LicenseRef-Proprietary
+     Copyright (c) 2025 Ipsutnu. All rights reserved. -->
+
 <!doctype html>
 <html lang="pt-br">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<!-- iOS: permitir webapp fullscreen ao “Adicionar à Tela de Início” -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <title>Blackhole</title>
@@ -11,7 +13,6 @@
     <style>
 	html, body { overscroll-behavior: none; }
 canvas, body { touch-action: none; -webkit-user-select: none; user-select: none; }
-	
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
       html, body { height: 100%; margin: 0; }
@@ -37,12 +38,12 @@ canvas, body { touch-action: none; -webkit-user-select: none; user-select: none;
         pointer-events: none;
         box-shadow: 0 4px 20px rgba(0,0,0,.6);
         z-index: 100;
-        opacity: 0; /* Torna o rodapé invisível */
-        transition: opacity 0.3s ease-in-out; /* Adiciona uma transição suave */
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
       }
       #hint:hover {
-        opacity: 1; /* Torna-o visível ao passar o mouse */
-        pointer-events: auto; /* Permite a interação com os links */
+        opacity: 1;
+        pointer-events: auto;
       }
       a { 
         color: #9bdcff; 
@@ -152,7 +153,6 @@ canvas, body { touch-action: none; -webkit-user-select: none; user-select: none;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.autoClear = false;
       document.body.appendChild(renderer.domElement);
-	  
 	  const canvas = renderer.domElement;
 const PI = Math.PI;
 const EPS = 0.001;
@@ -164,8 +164,6 @@ function applyCoversMuted(flag) {
     bookSystem.books.forEach(b => { if (b.sprite) b.sprite.visible = !flag; });
   }
 }
-
-// — pedir fullscreen no primeiro gesto (quando permitido pelo navegador)
 const isPhoneLike = /Android.+Mobile|iPhone|iPod/i.test(navigator.userAgent || "");
 document.addEventListener('DOMContentLoaded', () => {
     if (isPhoneLike) {
@@ -179,49 +177,36 @@ function requestFSOnce() {
   if (document.fullscreenElement || triedFS) return;
   triedFS = true;
 
-  const el = renderer.domElement; // canvas
+  const el = renderer.domElement;
   const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
   if (req) {
     Promise.resolve(req.call(el)).catch(err => {
       console.warn('Fullscreen negado:', err.name, err.message);
-      triedFS = false; // deixa tentar de novo se falhar
+      triedFS = false;
     });
   }
 }
 canvas.addEventListener('touchstart', requestFSOnce, { passive:false });
-
-// — impedir zoom/scroll da página durante os gestos no canvas
 canvas.addEventListener('touchmove',  e => e.preventDefault(), { passive:false });
-// iOS: prevenir “gesture*” do zoom da página
 document.addEventListener('gesturestart', e => e.preventDefault(), { passive:false });
 document.addEventListener('gesturechange', e => e.preventDefault(), { passive:false });
-
-// ===== Estado do toque
 const touchState = {
-  mode: null, // 'orbit' | 'pinch' | null
+  mode: null,
   startX: 0, startY: 0,
   startPhi: 0, startTheta: 0,
   startDist: 0,
   pinchStartDistance: 0,
   threeTap: { active:false, t0:0, moved:false }
 };
-
-// Sensibilidades
-const ROT_SENS   = Math.PI; // radianos por largura/altura de tela
-// zoom por pinça: distance = startDist / ratio (pinça abre => aproxima)
+const ROT_SENS   = Math.PI;
 const MIN_PHI = 0.05, MAX_PHI = Math.PI - 0.05;
-
-// Util: distância entre dois toques
 function touchDistance(t0, t1) {
   const dx = t1.clientX - t0.clientX;
   const dy = t1.clientY - t0.clientY;
   return Math.hypot(dx, dy);
 }
-
-// — TOUCH START
 canvas.addEventListener('touchstart', (e) => {
   if (e.touches.length === 1) {
-    // ORBIT
     const t = e.touches[0];
     touchState.mode = 'orbit';
     touchState.startX = t.clientX;
@@ -229,42 +214,32 @@ canvas.addEventListener('touchstart', (e) => {
     touchState.startPhi = controls.camera.targetPhi ?? controls.camera.phi ?? 0;
     touchState.startTheta = controls.camera.targetTheta ?? controls.camera.theta ?? 0;
   } else if (e.touches.length === 2) {
-    // PINCH
     const [t0, t1] = e.touches;
     touchState.mode = 'pinch';
     touchState.pinchStartDistance = touchDistance(t0, t1);
     touchState.startDist = controls.camera.targetDistance ?? controls.camera.distance ?? 10;
   } else if (e.touches.length === 3) {
-    // 3-DEDO TAP
     touchState.threeTap.active = true;
     touchState.threeTap.t0 = performance.now();
     touchState.threeTap.moved = false;
   }
 }, { passive:false });
-
-// — TOUCH MOVE
 canvas.addEventListener('touchmove', (e) => {
   if (e.touches.length === 1 && touchState.mode === 'orbit') {
     const t = e.touches[0];
     const dx = (t.clientX - touchState.startX) / canvas.clientWidth;
     const dy = (t.clientY - touchState.startY) / canvas.clientHeight;
-
-    // deslizar: 360° (theta), e inclinação (phi)
-    const targetTheta = touchState.startTheta - dx * ROT_SENS;      // esquerda/direita
+    const targetTheta = touchState.startTheta - dx * ROT_SENS;
     let   targetPhi   = touchState.startPhi   - dy * ROT_SENS;      // cima/baixo
-    // limita phi pra não virar de cabeça pra baixo
     targetPhi = Math.max(MIN_PHI, Math.min(MAX_PHI, targetPhi));
-
     controls.camera.targetTheta = targetTheta;
     controls.camera.targetPhi   = targetPhi;
-
   } else if (e.touches.length === 2) {
     const [t0, t1] = e.touches;
     const curD = touchDistance(t0, t1);
     const ratio = (curD > 0 && touchState.pinchStartDistance > 0)
       ? (curD / touchState.pinchStartDistance)
       : 1;
-    // pinça abre => ratio>1 => aproxima (dist menor)
     let target = touchState.startDist / ratio;
     const minD = controls.minDistance ?? 1.0;
     const maxD = controls.maxDistance ?? 100.0;
@@ -272,27 +247,21 @@ canvas.addEventListener('touchmove', (e) => {
     controls.camera.targetDistance = target;
 
   } else if (e.touches.length >= 3 && touchState.threeTap.active) {
-    // se deslocar muito, deixa de ser "tap"
     touchState.threeTap.moved = true;
   }
 }, { passive:false });
-
-// — TOUCH END
 canvas.addEventListener('touchend', (e) => {
   // 3 dedos terminaram rapidamente e sem arrastar? => toggle PNGs
   if (touchState.threeTap.active && e.touches.length === 0) {
     const dt = performance.now() - touchState.threeTap.t0;
     if (dt < 300 && !touchState.threeTap.moved) {
       applyCoversMuted(!coversMuted);
-      // se você usa hint/UI, pode atualizar um label aqui
     }
     touchState.threeTap.active = false;
   }
-
   if (e.touches.length === 0) {
     touchState.mode = null;
   } else if (e.touches.length === 1) {
-    // se voltou pra 1 dedo, retoma modo orbit
     touchState.mode = 'orbit';
     const t = e.touches[0];
     touchState.startX = t.clientX;
@@ -301,10 +270,7 @@ canvas.addEventListener('touchend', (e) => {
     touchState.startTheta = controls.camera.targetTheta ?? controls.camera.theta ?? 0;
   }
 }, { passive:false });
-
-// (Opcional) prevenir double-tap zoom da página em alguns navegadores
 document.addEventListener('dblclick', e => e.preventDefault(), { passive:false });
-	  
 const SPHERICAL_COMET_CONFIG = {
   count: 2,
   radius: 1000,
@@ -360,7 +326,6 @@ class SphericalComet {
     this.trail = new THREE.Line(g, lmat);
     this.trail.frustumCulled = false;
     this.trail.renderOrder = -40;
-
     scene.add(this.sprite);
     scene.add(this.trail);
     this.center = cfg.center.clone();
@@ -427,7 +392,6 @@ class SphericalCometManager {
         SHADER_ONLY: 'shader',
         PHYSICS_ONLY: 'physics'
       };
-
       let currentMode = renderModes.HYBRID;
       const shaderCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
       shaderCamera.position.set(0, 0, 1);
@@ -465,22 +429,17 @@ class SphericalCometManager {
         uniform bool uWarpSpace;
         uniform vec2 uResolution;
         uniform float uMixFactor;
-        
         varying vec2 vUv;
-        
         const float PI = 3.14159265359;
-        
         float hash(vec3 p) {
           p = fract(p * 0.3183099 + 0.1);
           p *= 17.0;
           return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
         }
-        
         vec3 blackbody(float temp) {
           temp = max(temp, 10.0);
           temp *= 100.0;
           float r, g, b;
-          
           if (temp < 3300.0) {
             r = 1.0;
             g = max(0.0, 0.39 * pow(max(temp / 1000.0, 0.1), -0.63));
@@ -494,44 +453,34 @@ class SphericalCometManager {
             g = max(0.0, 1.00 * pow(max(temp / 1000.0, 0.1), -0.32));
             b = 1.0;
           }
-          
           return vec3(r, g, b);
         }
-        
         vec3 calculateStars(vec3 worldDir) {
           float angleY = uTime * 0.002;
           mat3 rotation = mat3(cos(angleY), 0, sin(angleY), 
                               0, 1, 0, 
                               -sin(angleY), 0, cos(angleY));
-          
           worldDir = rotation * worldDir;
-          
           const float scale = 384.0;
           const float coverage = 0.007;
           const float maxLuminance = 0.04;
-          
           vec3 p = worldDir * scale;
           vec3 i = floor(p);
           vec3 f = p - i;
           float r = dot(f - 0.5, f - 0.5);
-          
           float hashValue = hash(i);
           float starFactor = step(1.0 - coverage, hashValue);
           float brightness = maxLuminance * smoothstep(0.25, 0.0, r) * starFactor;
-          
           float temp = 4000.0 + hashValue * 4000.0;
           return brightness * blackbody(temp);
         }
-        
         void main() {
           vec2 screenPos = vUv * 2.0 - 1.0;
           screenPos.x *= uResolution.x / uResolution.y;
-          
           float distance = length(uCameraPosition);
           vec3 forward = normalize(-uCameraPosition);
           vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
           vec3 up = cross(right, forward);
-          
           float fov = 0.8 + (1.0 / (distance * 0.1 + 0.1));
           vec3 rayDir = normalize(forward + screenPos.x * right * fov + screenPos.y * up * fov);
           vec3 center = vec3(0.0);
@@ -541,10 +490,8 @@ class SphericalCometManager {
           vec3 rayPos = uCameraPosition;
           const float steps = 20.0;
           const float stepSize = 0.5;
-          
           for (float i = 0.0; i < steps; i++) {
             rayPos += rayDir * stepSize;
-            
             float r = length(rayPos.xz);
             float h = rayPos.y;
             if (r > 2.5 && r < 8.0 && abs(h) < 0.3) {
@@ -673,38 +620,30 @@ const galacticArmSystem = createGalacticArms();
         const starGeometry = new THREE.BufferGeometry();
         const starVertices = [];
         const starColors = [];
-        
         for (let i = 0; i < 4000; i++) {
           const radius = 500 + Math.random() * 1500;
           const theta = Math.random() * Math.PI * 2;
           const phi = Math.random() * Math.PI;
-          
           const x = radius * Math.sin(phi) * Math.cos(theta);
           const y = radius * Math.sin(phi) * Math.sin(theta);
           const z = radius * Math.cos(phi);
-          
           starVertices.push(x, y, z);
-          
           const temp = Math.random();
           const r = temp > 0.7 ? 1 : 0.8 + temp * 0.2;
           const g = temp > 0.5 ? 0.9 + temp * 0.1 : 0.7 + temp * 0.3;
           const b = temp < 0.3 ? 1 : 0.6 + temp * 0.4;
           starColors.push(r, g, b);
         }
-        
         starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
         starGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
-        
         const starMaterial = new THREE.PointsMaterial({
           size: 2,
           vertexColors: true,
           transparent: true,
           opacity: 0.8
         });
-        
         return new THREE.Points(starGeometry, starMaterial);
       }
-
       const starField = createStarField();
       scene.add(starField);
 	  const sphericalComets = new SphericalCometManager(scene, SPHERICAL_COMET_CONFIG);
@@ -715,16 +654,13 @@ const galacticArmSystem = createGalacticArms();
         const dustSizes = [];
         const dustOpacities = [];
         const dustParticleCount = 5000;
-        
         for (let i = 0; i < dustParticleCount; i++) {
           const radius = 15 + Math.random() * 40;
           const angle = Math.random() * Math.PI * 2;
           const height = (Math.random() - 0.5) * Math.max(0.3, radius * 0.02);
-          
           const x = radius * Math.cos(angle);
           const y = height;
           const z = radius * Math.sin(angle);
-          
           dustVertices.push(x, y, z);
           const dustIntensity = 0.2 + Math.random() * 0.3;
           dustColors.push(
@@ -738,7 +674,6 @@ const galacticArmSystem = createGalacticArms();
         dustTailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dustVertices, 3));
         dustTailGeometry.setAttribute('color', new THREE.Float32BufferAttribute(dustColors, 3));
         dustTailGeometry.setAttribute('size', new THREE.Float32BufferAttribute(dustSizes, 1));
-        
         const dustMaterial = new THREE.ShaderMaterial({
          transparent: true,
     depthTest: true,  
@@ -749,7 +684,6 @@ const galacticArmSystem = createGalacticArms();
             attribute float size;
             varying vec3 vColor;
             varying float vSize;
-            
             void main() {
               vColor = color;
               vSize = size;
@@ -761,11 +695,9 @@ const galacticArmSystem = createGalacticArms();
           fragmentShader: `
             varying vec3 vColor;
             varying float vSize;
-            
             void main() {
               vec2 center = gl_PointCoord - vec2(0.5);
               float dist = length(center);
-              
               if (dist > 0.5) discard;
               float opacity = (1.0 - smoothstep(0.0, 0.5, dist)) * 0.15;
               
@@ -773,13 +705,10 @@ const galacticArmSystem = createGalacticArms();
             }
           `
         });
-        
         const dustTails = new THREE.Points(dustTailGeometry, dustMaterial);
         scene.add(dustTails);
-        
         return { mesh: dustTails, geometry: dustTailGeometry, particleCount: dustParticleCount };
       }
-
       const dustTailSystem = createDustTails();
       const blackHoleGeometry = new THREE.SphereGeometry(2, 64, 64);
       const blackHolePhysicsMaterial = new THREE.MeshBasicMaterial({ 
@@ -790,20 +719,15 @@ const galacticArmSystem = createGalacticArms();
       const blackHole = new THREE.Mesh(blackHoleGeometry, blackHolePhysicsMaterial);
       scene.add(blackHole);
       const accretionRings = [];
-      
       function createAccretionDisk() {
         const ringCount = 12;
-        
         for (let ring = 0; ring < ringCount; ring++) {
           const innerRadius = 2.5 + ring * 0.4;
           const outerRadius = innerRadius + 0.3;
-          
           const segments = 64;
           const geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments, 1);
-          
           const temperature = Math.pow(1 - (ring / ringCount), 0.8);
           let color;
-          
           if (temperature > 0.9) {
             color = new THREE.Color(1, 0.95, 0.8);
           } else if (temperature > 0.7) {
@@ -813,7 +737,6 @@ const galacticArmSystem = createGalacticArms();
           } else {
             color = new THREE.Color(1, 0.2, 0.05);
           }
-          
           const material = new THREE.MeshBasicMaterial({
             color: color,
             side: THREE.DoubleSide,
@@ -821,13 +744,10 @@ const galacticArmSystem = createGalacticArms();
             opacity: 0.3 + temperature * 0.5,
             blending: THREE.AdditiveBlending
           });
-          
           const ringMesh = new THREE.Mesh(geometry, material);
           ringMesh.rotation.x = -Math.PI / 2;
           ringMesh.rotation.z = (Math.random() - 0.5) * 0.1;
-          
           const orbitalSpeed = 0.03 / Math.sqrt(innerRadius / 2.5);
-          
           accretionRings.push({
             mesh: ringMesh,
             radius: innerRadius,
@@ -837,11 +757,9 @@ const galacticArmSystem = createGalacticArms();
             wobble: (Math.random() - 0.5) * 0.02,
             wobbleSpeed: 0.005 + Math.random() * 0.01
           });
-          
           scene.add(ringMesh);
         }
       }
-
       createAccretionDisk();
       const meteorSystem = {
         geometry: new THREE.BufferGeometry(),
@@ -856,7 +774,6 @@ const galacticArmSystem = createGalacticArms();
             varying vec3 vColor;
             varying float vBrightness;
             varying float vTrail;
-            
             void main() {
               vColor = color;
               vBrightness = brightness;
@@ -870,7 +787,6 @@ const galacticArmSystem = createGalacticArms();
             varying vec3 vColor;
             varying float vBrightness;
             varying float vTrail;
-            
             void main() {
               vec2 center = gl_PointCoord - vec2(0.5);
               float dist = length(center);
@@ -881,14 +797,12 @@ const galacticArmSystem = createGalacticArms();
               opacity = smoothstep(0.0, 1.0, opacity);
               float centerBoost = 1.0 - smoothstep(0.0, 0.15, dist);
               vec3 finalColor = vColor * (1.0 + centerBoost * 0.5);
-              
               gl_FragColor = vec4(finalColor, opacity);
             }
           `
         }),
         data: []
       };
-
       function createMeteorParticles() {
         const meteorCount = 11690;
         const positions = [];
@@ -1013,7 +927,6 @@ trailGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
   });
   miniMeteorCount++;
 }
-
 function updateMiniMeteors(deltaTime) {
   for (let i = miniMeteors.length - 1; i >= 0; i--) {
     const meteor = miniMeteors[i];
@@ -1024,12 +937,10 @@ function updateMiniMeteors(deltaTime) {
       const gravityDirection = position.clone().normalize().multiplyScalar(-1);
       velocity.add(gravityDirection.multiplyScalar(gravityStrength * deltaTime));
     }
-
     if (velocity.length() < 2.0) {
       const initialBoost = position.clone().normalize().multiplyScalar(-2.0);
       velocity.add(initialBoost.multiplyScalar(deltaTime * 0.5));
     }
-
     position.add(velocity.clone().multiplyScalar(deltaTime));
     meteor.mesh.position.copy(position);
     const trailSegments = positions.length / 3;
@@ -1042,11 +953,9 @@ function updateMiniMeteors(deltaTime) {
     positionAttribute.setX(0, position.x);
     positionAttribute.setY(0, position.y);
     positionAttribute.setZ(0, position.z);
-
     positionAttribute.needsUpdate = true;
     const opacity = 0.6 + Math.min(velocity.length() / 10, 0.4);
     trailMesh.material.opacity = opacity;
-
     meteor.life -= deltaTime * 15;
     if (distanceToCenter < 1) {
       scene.remove(meteor.mesh);
@@ -1067,18 +976,14 @@ function updateMiniMeteors(deltaTime) {
             opacity: 0.5,
             blending: THREE.AdditiveBlending
           });
-          
           const jet = new THREE.Mesh(jetGeometry, jetMaterial);
           jet.position.y = j === 0 ? 12.5 : -12.5;
           if (j === 1) jet.rotation.x = Math.PI;
-          
           scene.add(jet);
           jets.push(jet);
         }
-        
         return jets;
       }
-
       const jets = createRelativisticJets();
       let isMouseDown = false;
       let isRightMouseDown = false;
@@ -1098,7 +1003,6 @@ function updateMiniMeteors(deltaTime) {
         lastMouseX = event.clientX;
         lastMouseY = event.clientY;
       });
-
       document.addEventListener('mouseup', (event) => {
         if (event.button === 0) {
           isMouseDown = false;
@@ -1124,7 +1028,6 @@ function updateMiniMeteors(deltaTime) {
         
         createMiniMeteor(startPosition.x, startPosition.y, startPosition.z);
       });
-
       document.addEventListener('mousemove', (event) => {
         if (isMouseDown && !isRightMouseDown) {
           const deltaX = event.clientX - lastMouseX;
@@ -1138,7 +1041,6 @@ function updateMiniMeteors(deltaTime) {
           lastMouseY = event.clientY;
         }
       });
-
       document.addEventListener('wheel', (event) => {
         const zoomDelta = event.deltaY > 0 ? 1.1 : 0.9;
         controls.camera.targetDistance = Math.max(controls.minDistance, 
@@ -1150,7 +1052,6 @@ function updateMiniMeteors(deltaTime) {
         controls.camera.targetPhi = Math.PI * 0.3;
         controls.camera.targetTheta = 0;
       });
-
       document.getElementById('toggle-warp').addEventListener('click', (e) => {
         e.preventDefault();
         controls.warpSpace = !controls.warpSpace;
@@ -1159,27 +1060,21 @@ function updateMiniMeteors(deltaTime) {
       let time = 0;
       let frameCount = 0;
       let lastTime = Date.now();
-
       function updateCamera() {
         controls.camera.distance += (controls.camera.targetDistance - controls.camera.distance) * controls.damping;
         controls.camera.phi += (controls.camera.targetPhi - controls.camera.phi) * controls.damping;
         controls.camera.theta += (controls.camera.targetTheta - controls.camera.theta) * controls.damping;
-        
         const x = controls.camera.distance * Math.sin(controls.camera.phi) * Math.cos(controls.camera.theta);
         const y = controls.camera.distance * Math.cos(controls.camera.phi);
         const z = controls.camera.distance * Math.sin(controls.camera.phi) * Math.sin(controls.camera.theta);
-        
         camera.position.set(x, y, z);
         camera.lookAt(0, 0, 0);
-        
         virtualCamera.copy(camera.position);
       }
-
       function animate() {
         const currentTime = Date.now();
         const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
-        
         time += deltaTime;
         frameCount++;
 sphericalComets.update(deltaTime);
@@ -1195,13 +1090,10 @@ sphericalComets.update(deltaTime);
           if (isGravityAltered) {
             speedMultiplier *= gravityMultiplier;
           }
-          
           ring.angle += ring.baseSpeed * speedMultiplier * deltaTime;
           ring.mesh.rotation.y = ring.angle;
-          
           const wobble = Math.sin(time * ring.wobbleSpeed + index) * ring.wobble;
           ring.mesh.rotation.x = -Math.PI / 2 + wobble;
-          
           const baseOpacity = 0.3 + (1 - index / accretionRings.length) * 0.5;
           let opacity = baseOpacity + Math.sin(time * 0.5 + index) * 0.1;
           if (isGravityAltered && ring.radius < 8.0) {
@@ -1209,13 +1101,11 @@ sphericalComets.update(deltaTime);
             const pulsation = Math.sin(time * 8 + index * 0.5) * 0.3;
             opacity += pulsation;
           }
-          
           ring.mesh.material.opacity = Math.max(0.1, Math.min(1.0, opacity));
         });
         const positions = realisticMeteors.geometry.attributes.position.array;
         const brightnesses = realisticMeteors.geometry.attributes.brightness.array;
         const trails = realisticMeteors.geometry.attributes.trail.array;
-        
         for (let i = 0; i < meteorSystem.data.length; i++) {
           const meteor = meteorSystem.data[i];
           const i3 = i * 3;
@@ -1225,11 +1115,9 @@ sphericalComets.update(deltaTime);
           } else if (meteor.radius < 12.0) {
             speedMultiplier = 1.5;
           }
-          
           if (isGravityAltered) {
             speedMultiplier *= gravityMultiplier;
           }
-          
           meteor.angle += meteor.baseOrbitalSpeed * speedMultiplier * deltaTime;
           const turbulence = Math.sin(time * meteor.wobbleSpeed + meteor.phase) * meteor.turbulence;
           const currentHeight = meteor.baseHeight + turbulence;
@@ -1242,7 +1130,6 @@ sphericalComets.update(deltaTime);
             const alterationEffect = 1 / (meteor.radius + 1.0);
             radiusModifier += Math.sin(time * 5 + meteor.phase) * alterationEffect * 0.15;
           }
-          
             const currentRadius = meteor.radius * radiusModifier;
           let x = currentRadius * Math.cos(meteor.angle);
           let y = currentHeight;
@@ -1316,7 +1203,6 @@ sphericalComets.update(deltaTime);
           dustPositions[i3] = currentRadius * Math.cos(angle);
           dustPositions[i3 + 2] = currentRadius * Math.sin(angle);
         }
-        
         dustTailSystem.geometry.attributes.position.needsUpdate = true;
         starField.rotation.y += 0.00005;
         if (Array.isArray(jets)) {
@@ -1362,7 +1248,6 @@ sphericalComets.update(deltaTime);
           document.getElementById('mini-meteors').textContent = miniMeteorCount;
           document.getElementById('fps').textContent = Math.round(1 / deltaTime);
         }
-
         requestAnimationFrame(animate);
       }
       window.addEventListener('resize', () => {
@@ -1384,6 +1269,7 @@ sphericalComets.update(deltaTime);
     </script>
   </body>
 </html>
+
 
 
 
